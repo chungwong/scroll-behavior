@@ -54,7 +54,7 @@ export default class ScrollBehavior {
     // We have to listen to each window scroll update rather than to just
     // location updates, because some browsers will update scroll position
     // before emitting the location change.
-    on(window, 'scroll', this._onWindowScroll);
+    on(window, 'scroll', this._onTimedWindowScroll);
 
     this._removeTransitionHook = addTransitionHook(() => {
       requestAnimationFrame.cancel(this._saveWindowPositionHandle);
@@ -137,13 +137,37 @@ export default class ScrollBehavior {
       }
     }
 
-    off(window, 'scroll', this._onWindowScroll);
+    off(window, 'scroll', this._onTimedWindowScroll);
     this._cancelCheckWindowScroll();
 
     this._removeTransitionHook();
   }
 
-  _onWindowScroll = () => {
+  _onTimedWindowScroll = () => {
+    /*
+     * Safari will trigger _onWindowScroll() randomnly when pressing/swiping
+     * back to previous page. This if statement is added here to prevent
+     * _onWindowScroll() from calling before farce.StateStorage.read() is
+     * called.
+     */
+    if (isMobileSafari()) {
+      setTimeout(this._onWindowScroll.bind(this, window.location.pathname),
+        500);
+    } else {
+      this._onWindowScroll();
+    }
+  }
+
+  _onWindowScroll = (pathname) => {
+    /*
+     * As `_onWindowScroll` could be dealyed by `setTimeout`, it is necessary
+     * to make sure `_onWindowScroll` only saves position for the right
+     * pathname
+     */
+    if (pathname && (pathname !== window.location.pathname)) {
+      return;
+    }
+
     // It's possible that this scroll operation was triggered by what will be a
     // `POP` transition. Instead of updating the saved location immediately, we
     // have to enqueue the update, then potentially cancel it if we observe a
